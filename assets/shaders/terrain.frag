@@ -1,9 +1,35 @@
 #version 410 core
 in VS_OUT { vec3 worldPos; vec3 normal; vec3 tangent; vec2 uv; vec4 lightPos; } v;
 uniform sampler2D uAlbedo0, uAlbedo1, uAlbedo2, uNormal0, uNormal1, uNormal2, uShadowMap;
-uniform vec3 uCameraPos, uSunDirection, uAmbientSky;
-uniform float uRoughness;
+uniform vec3 uCameraPos, uSunDirection, uSunColor, uAmbientSky, uFogColor;
+uniform float uAmbientStrength, uRoughness, uFogDensity, uFogStart, uFogMax, uMetallic;
+uniform int uDebugMode;
 out vec4 fragColor;
+
+const int DEBUG_NORMALS = 1;
+const int DEBUG_ROUGHNESS = 2;
+const int DEBUG_METALLIC = 3;
+const int DEBUG_BASE_COLOR = 4;
+const int DEBUG_AMBIENT = 5;
+const int DEBUG_DIRECT = 6;
+const int DEBUG_SPECULAR = 7;
+const int DEBUG_DIFFUSE = 8;
+const int DEBUG_SHADOWS = 9;
+const int DEBUG_FOG = 10;
+const int DEBUG_SKY = 11;
+const int DEBUG_LIGHT_POSITIONS = 12;
+const int DEBUG_LIGHT_DIRECTIONS = 13;
+const int DEBUG_SUN_DIRECTION = 14;
+const int DEBUG_EXPOSURE = 15;
+const int DEBUG_HDR = 16;
+vec3 applyFog(vec3 fragColor, vec3 worldPos, vec3 cameraPos, vec3 fogColor, float fogDensity, float fogStart, float fogMax) {
+    float distance = length(worldPos - cameraPos);
+    float effectiveDistance = max(0.0, distance - fogStart);
+    float fogFactor = exp(-effectiveDistance * fogDensity);
+    fogFactor = max(0.0, min(1.0, fogFactor));
+    if (distance > fogMax) { float extraFar = (distance - fogMax) / (fogMax * 0.5); fogFactor = mix(0.01, fogFactor, 1.0 / (1.0 + extraFar * 2.0)); }
+    return mix(fogColor, fragColor, fogFactor);
+}
 float shadowPCF(vec4 lightPos, vec3 n) {
     vec3 p = lightPos.xyz / lightPos.w * .5 + .5;
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 0.0;
@@ -37,6 +63,29 @@ void main() {
     vec3 mapN = mix(mix(texture(uNormal2,v.uv).xyz, texture(uNormal0,v.uv).xyz, valley), texture(uNormal1,v.uv).xyz, rock) * 2.0 - 1.0;
     vec3 N = normalize(mat3(t,b,baseN) * mapN), L = normalize(-uSunDirection), V = normalize(uCameraPos-v.worldPos), H = normalize(L+V);
     float ndl = max(dot(N,L),0.0), spec = pow(max(dot(N,H),0.0), mix(128.0, 8.0, uRoughness));
-    vec3 direct = (albedo * ndl + vec3(spec * .38)) * (1.0 - shadowPCF(v.lightPos, N));
-    fragColor = vec4(uAmbientSky * albedo * .55 + direct, 1.0);
+    vec3 direct = (albedo * ndl * uSunColor + vec3(spec * .38) * uSunColor) * (1.0 - shadowPCF(v.lightPos, N));
+    vec3 ambientContribution = uAmbientSky * albedo * uAmbientStrength;
+    vec3 diffuseContribution = albedo * ndl * uSunColor;
+    vec3 specularContribution = vec3(spec * .38) * uSunColor;
+    vec3 color = ambientContribution + direct;
+    float fogDistance = length(v.worldPos - uCameraPos);
+    float fogFactor = exp(-max(0.0, fogDistance - uFogStart) * uFogDensity);
+    fogFactor = clamp(fogFactor, 0.0, 1.0);
+    vec3 debugColor = color;
+    if (uDebugMode == DEBUG_NORMALS) debugColor = normalize(N) * 0.5 + 0.5;
+    else if (uDebugMode == DEBUG_ROUGHNESS) debugColor = vec3(uRoughness);
+    else if (uDebugMode == DEBUG_METALLIC) debugColor = vec3(uMetallic);
+    else if (uDebugMode == DEBUG_BASE_COLOR) debugColor = albedo;
+    else if (uDebugMode == DEBUG_AMBIENT) debugColor = ambientContribution;
+    else if (uDebugMode == DEBUG_DIRECT) debugColor = direct;
+    else if (uDebugMode == DEBUG_SPECULAR) debugColor = specularContribution;
+    else if (uDebugMode == DEBUG_DIFFUSE) debugColor = diffuseContribution;
+    else if (uDebugMode == DEBUG_SHADOWS) debugColor = vec3(1.0 - shadowPCF(v.lightPos, N));
+    else if (uDebugMode == DEBUG_FOG) debugColor = vec3(1.0 - fogFactor);
+    else if (uDebugMode == DEBUG_SKY) debugColor = uAmbientSky;
+    else if (uDebugMode == DEBUG_SUN_DIRECTION) debugColor = vec3(0.5 + 0.5 * normalize(-uSunDirection));
+    else if (uDebugMode == DEBUG_EXPOSURE) debugColor = vec3(1.0);
+    else if (uDebugMode == DEBUG_HDR) debugColor = vec3(0.5 + 0.5 * normalize(color));
+    else if (uDebugMode == 0) debugColor = applyFog(color, v.worldPos, uCameraPos, uFogColor, uFogDensity, uFogStart, uFogMax);
+    fragColor = vec4(debugColor, 1.0);
 }
