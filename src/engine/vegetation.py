@@ -6,7 +6,7 @@ from .mesh import Mesh
 
 class InstancedVegetation:
     """One low-poly grass blade mesh, batched into a single instanced draw call."""
-    def __init__(self, terrain, count=4800, field_size=104.0):
+    def __init__(self, terrain, count=12000, field_size=260.0):
         # Two crossed cards form visible blades from every camera direction.
         vertices = [[-.055, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0], [.055, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0],
                     [.028, .55, 0, 0, 1, 0, 1, 0, 0, 1, 1], [-.028, .55, 0, 0, 1, 0, 1, 0, 0, 0, 1],
@@ -16,12 +16,13 @@ class InstancedVegetation:
         self.mesh, self.count = Mesh(vertices, indices), count
         rng, transforms = np.random.default_rng(9), np.zeros((count, 4, 4), np.float32)
         i = attempts = 0
-        while i < count and attempts < count * 12:
+        while i < count and attempts < count * 18:
             attempts += 1
-            x, z = rng.uniform(-field_size / 2, field_size / 2, 2); scale = rng.uniform(.55, 1.05)
+            x, z = rng.uniform(-field_size / 2, field_size / 2, 2)
+            scale = rng.uniform(.62, 1.65)
             y = terrain.height_at(x, z)
             if y < .35:
-                continue  # no underwater grass or grass on the sandy beach
+                continue
             transforms[i] = [[scale, 0, 0, 0], [0, scale, 0, 0], [0, 0, scale, 0], [x, y, z, 1]]
             i += 1
         self.count = i

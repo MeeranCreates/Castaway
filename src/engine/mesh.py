@@ -48,12 +48,13 @@ def make_box(size=1.0):
     return Mesh(vertices, indices)
 
 
-def make_cone(radius=.5, height=1.0, segments=10):
+def make_cone(radius=.5, height=1.0, segments=18):
     vertices = [[0, height, 0, 0, 1, 0, 1, 0, 0, .5, 1], [0, 0, 0, 0, -1, 0, 1, 0, 0, .5, .5]]
     indices = []
     for i in range(segments):
         a = i * 6.283185 / segments; x, z = radius * np.cos(a), radius * np.sin(a)
-        n = np.array([x, radius / height, z]); n /= np.linalg.norm(n)
+        n = np.array([x, 1.0, z], dtype=np.float32)
+        n /= np.linalg.norm(n)
         vertices.append([x, 0, z, *n, 1, 0, 0, i / segments, 0])
     for i in range(segments):
         current, nxt = 2 + i, 2 + (i + 1) % segments
