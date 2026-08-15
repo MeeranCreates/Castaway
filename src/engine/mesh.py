@@ -48,8 +48,9 @@ def make_box(size=1.0):
     return Mesh(vertices, indices)
 
 
-def make_cone(radius=.5, height=1.0, segments=18):
-    vertices = [[0, height, 0, 0, 1, 0, 1, 0, 0, .5, 1], [0, 0, 0, 0, -1, 0, 1, 0, 0, .5, .5]]
+def make_cone(radius=.5, height=1.0, segments=24):
+    base_y = -0.35 * height
+    vertices = [[0, height, 0, 0, 1, 0, 1, 0, 0, .5, 1], [0, base_y, 0, 0, -1, 0, 1, 0, 0, .5, .5]]
     indices = []
     for i in range(segments):
         a = i * 6.283185 / segments; x, z = radius * np.cos(a), radius * np.sin(a)
@@ -58,5 +59,26 @@ def make_cone(radius=.5, height=1.0, segments=18):
         vertices.append([x, 0, z, *n, 1, 0, 0, i / segments, 0])
     for i in range(segments):
         current, nxt = 2 + i, 2 + (i + 1) % segments
-        indices += [0, current, nxt, 1, nxt, current]
+        indices += [0, nxt, current, 1, current, nxt]
+    return Mesh(vertices, indices)
+
+
+def make_sphere(radius=1.0, segments=16, rings=12):
+    """UV-mapped sphere for sun, moon, and stars backdrop."""
+    vertices, indices = [], []
+    for ring in range(rings + 1):
+        theta = ring * np.pi / rings
+        sin_theta, cos_theta = np.sin(theta), np.cos(theta)
+        for seg in range(segments + 1):
+            phi = seg * 2.0 * np.pi / segments
+            sin_phi, cos_phi = np.sin(phi), np.cos(phi)
+            x, y, z = radius * sin_theta * cos_phi, radius * cos_theta, radius * sin_theta * sin_phi
+            nx, ny, nz = sin_theta * cos_phi, cos_theta, sin_theta * sin_phi
+            u, v = seg / segments, ring / rings
+            vertices.append([x, y, z, nx, ny, nz, 1, 0, 0, u, v])
+    for ring in range(rings):
+        for seg in range(segments):
+            a = ring * (segments + 1) + seg
+            b = a + segments + 1
+            indices += [a, b, a + 1, a + 1, b, b + 1]
     return Mesh(vertices, indices)

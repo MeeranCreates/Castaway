@@ -7,7 +7,7 @@ from OpenGL.GL import *
 from .window import Window
 from .camera import OrbitCamera
 from .shader import Shader
-from .mesh import make_plane, make_box
+from .mesh import make_plane, make_box, make_sphere
 from .terrain import Terrain
 from .vegetation import InstancedVegetation
 from .render_targets import ShadowMap, HdrTarget
@@ -21,7 +21,8 @@ ATTRS = {"aPosition": 0, "aNormal": 1, "aTangent": 2, "aUV": 3,
          "aInstance0": 4, "aInstance1": 5, "aInstance2": 6, "aInstance3": 7}
 
 
-def shader(name, attrs=ATTRS):
+def shader(name, attrs=None):
+    if attrs is None: attrs = ATTRS
     return Shader(os.path.join(SHADERS, name + ".vert"), os.path.join(SHADERS, name + ".frag"), attrs)
 
 
@@ -64,6 +65,10 @@ class GameApp:
         self.terrain_shader, self.water_shader = shader("terrain"), shader("water")
         self.grass_shader, self.sky_shader, self.post_shader = shader("vegetation"), shader("sky", {"aPosition": 0}), shader("post", {"aPosition": 0})
         self.scene_shader = shader("scene")
+        self.sun_shader = shader("sun", {"aPosition": 0}); self.sun_mesh = make_sphere(1.2, 16, 12)
+        self.moon_shader = shader("moon", {"aPosition": 0}); self.moon_mesh = make_sphere(1.0, 16, 12)
+        self.stars_shader = shader("stars", {"aPosition": 0}); self.stars_mesh = make_sphere(200.0, 32, 24)
+        self.clouds_shader = shader("clouds", {"aPosition": 0, "aUV": 3}); self.clouds_mesh = make_plane(1000.0)
         self.albedo = [ground_texture(c, seed) for c, seed in (((52, 105, 38), 7), ((108, 103, 91), 11), ((104, 62, 31), 17))]
         self.normal = solid_texture(None, True)
         glfw.set_input_mode(self.window.handle, glfw.CURSOR, glfw.CURSOR_DISABLED)
@@ -120,6 +125,16 @@ class GameApp:
         self.sky_shader.set("uSunDirection", sun); self.sky_shader.set("uSkyBottom", bottom); self.sky_shader.set("uSkyHorizon", horizon); self.sky_shader.set("uSkyZenith", zenith)
         glDepthFunc(GL_LEQUAL); self.screen.draw(); glDepthFunc(GL_LESS)
 
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE); glDepthMask(GL_FALSE)
+        self.stars_shader.use(); self.stars_shader.set("uView", view); self.stars_shader.set("uProjection", projection); self.stars_shader.set("uSunDirection", sun); self.stars_shader.set("uTime", self.time); self.stars_mesh.draw()
+        self.sun_shader.use(); self.sun_shader.set("uView", view); self.sun_shader.set("uProjection", projection); self.sun_shader.set("uSunDirection", sun)
+        sun_pos = glm.translate(glm.mat4(1), self.camera.position + sun * 150.0); self.sun_shader.set("uView", glm.mat4(glm.mat3(view)) * glm.translate(glm.mat4(1), sun * 150.0))
+        self.sun_mesh.draw()
+        self.moon_shader.use(); self.moon_shader.set("uView", view); self.moon_shader.set("uProjection", projection); self.moon_shader.set("uSunDirection", sun); self.moon_shader.set("uTime", self.time)
+        self.moon_shader.set("uView", glm.mat4(glm.mat3(view)) * glm.translate(glm.mat4(1), -sun * 150.0))
+        self.moon_mesh.draw()
+        glDepthMask(GL_TRUE); glDisable(GL_BLEND)
+
         s = self.terrain_shader; s.use()
         for name, value in (("uModel", glm.mat4(1)), ("uView", view), ("uProjection", projection), ("uLightSpace", light_space),
                             ("uCameraPos", self.camera.position), ("uSunDirection", sun),
@@ -134,6 +149,12 @@ class GameApp:
         s = self.grass_shader; s.use()
         for name, value in (("uView", view), ("uProjection", projection), ("uTime", self.time), ("uSunDirection", sun)): s.set(name, value)
         glDisable(GL_CULL_FACE); self.vegetation.draw(); glEnable(GL_CULL_FACE)
+
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE)
+        s = self.clouds_shader; s.use()
+        for name, value in (("uView", glm.mat4(glm.mat3(view)) * glm.translate(glm.mat4(1), glm.vec3(0, 50, 0))), ("uProjection", projection), ("uSunDirection", sun), ("uTime", self.time)): s.set(name, value)
+        self.clouds_mesh.draw()
+        glDepthMask(GL_TRUE); glDisable(GL_BLEND)
 
         s = self.water_shader; s.use()
         for name, value in (("uModel", glm.mat4(1)), ("uView", view), ("uProjection", projection), ("uCameraPos", self.camera.position), ("uTime", self.time), ("uSunDirection", sun)): s.set(name, value)

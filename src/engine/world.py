@@ -39,8 +39,8 @@ class IslandProps:
             y = terrain.height_at(x, z)
             trunk_color, canopy_color, scale_mod, canopy_scale = tree_variants[variant]
             trunk_scale = glm.vec3(.35 * scale_mod, size * 1.45 * scale_mod, .35 * scale_mod)
-            canopy_scale = glm.vec3(size * 1.1 * canopy_scale, size * 2.2 * canopy_scale, size * 1.1 * canopy_scale)
-            canopy_center = glm.vec3(x, y + size * 1.65 * scale_mod, z)
+            canopy_scale = glm.vec3(size * 1.8 * canopy_scale, size * 2.0 * canopy_scale, size * 1.8 * canopy_scale)
+            canopy_center = glm.vec3(x, y + size * 1.35 * scale_mod, z)
             self.objects += [
                 SceneObject(box, glm.vec3(x, y + size * .75 * scale_mod, z), trunk_scale, trunk_color, .75),
                 SceneObject(box, glm.vec3(x, y + size * 1.05 * scale_mod, z), glm.vec3(.30 * scale_mod, .36 * scale_mod, .30 * scale_mod), trunk_color),
