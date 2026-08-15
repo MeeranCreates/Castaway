@@ -2,3 +2,4 @@ glfw==2.10.2
 numpy==2.5.2
 PyOpenGL==3.1.10
 PyOpenGL-accelerate==3.1.10
+PyGLM==2.8.2

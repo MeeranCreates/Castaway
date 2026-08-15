@@ -14,7 +14,7 @@ The goal isn't simply to survive.
 
 ## 🎮 Project Status
 
-🚧 **Early Development**
+🚧 **Rendering foundation implemented**
 
 The project has just begun.
 
@@ -25,11 +25,11 @@ The project has just begun.
 * [x] Python virtual environment configured
 * [x] OpenGL dependencies installed
 * [x] First application window created
-* [ ] OpenGL rendering
-* [ ] First triangle
-* [ ] 3D rendering foundation
-* [ ] Camera system
-* [ ] World
+* [x] OpenGL 4.1 Core rendering (macOS-safe)
+* [x] Retina-aware framebuffer handling
+* [x] 3D rendering foundation and orbit camera
+* [x] Procedural terrain, shadows, water, vegetation, sky, HDR post-process
+* [x] Playable terrain-following player and collidable island props
 * [ ] Player
 * [ ] Survival systems
 * [ ] Exploration and story
@@ -103,6 +103,15 @@ Castaway/
 ```
 
 The project structure will grow as new systems are actually needed rather than creating large numbers of empty files in advance.
+
+## Running on an M1/M2/M3/M4 Mac
+
+The renderer requires a native OpenGL 4.1 Core Profile. Follow the complete setup and architecture guide in [docs/M1_OPENGL_MASTER_GUIDE.md](docs/M1_OPENGL_MASTER_GUIDE.md), then run:
+
+```zsh
+source .venv/bin/activate
+python -m src.main
+```
 
 ---
 
