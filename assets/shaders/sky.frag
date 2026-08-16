@@ -1,6 +1,6 @@
 #version 410 core
 
-in float vHeight;
+in vec3 vViewDir;
 
 uniform vec3 uSunDirection;
 uniform vec3 uSkyBottom;
@@ -11,43 +11,33 @@ out vec4 fragColor;
 
 void main()
 {
-    float h = clamp(vHeight, 0.0, 1.0);
+    vec3 dir = normalize(vViewDir);
+    float height = clamp(dir.y, -1.0, 1.0);
 
-    // Smooth atmospheric height.
-    // Keeps the horizon transition continuous instead of creating
-    // two obvious gradient sections.
-    float atmosphere = smoothstep(0.0, 1.0, h);
+    // Continuous atmosphere from the bottom haze up to the zenith.
+    float lowerAtmosphere = smoothstep(-0.35, 0.15, height);
+    float upperAtmosphere = smoothstep(0.15, 0.95, height);
+    vec3 color = mix(uSkyBottom, uSkyHorizon, lowerAtmosphere);
+    color = mix(color, uSkyZenith, upperAtmosphere);
 
-    // Start with the horizon and smoothly transition toward the zenith.
-    vec3 color = mix(
-        uSkyHorizon,
-        uSkyZenith,
-        atmosphere
-    );
+    // Near the horizon the atmosphere should brighten and haze out into the terrain.
+    float horizonBand = smoothstep(0.0, 0.55, 1.0 - abs(height));
+    vec3 hazeColor = mix(uSkyBottom, uSkyHorizon, 0.65);
+    color = mix(color, hazeColor, horizonBand * 0.38);
 
-    // Very subtle lower-atmosphere influence.
-    float horizonFactor = 1.0 - smoothstep(0.0, 0.35, h);
+    // Atmospheric warm light is a sky effect only. The actual sunlight for surfaces
+    // remains world-space and is computed in the lit material shaders using uSunDirection.
+    vec3 sunDir = normalize(uSunDirection);
+    float sunAlt = clamp(sunDir.y, -1.0, 1.0);
+    float daylight = smoothstep(-0.2, 0.25, sunAlt);
+    float sunSide = max(dot(dir, sunDir), 0.0);
+    float sunGlow = pow(sunSide, 7.0) * daylight;
 
-    color = mix(
-        color,
-        uSkyBottom,
-        horizonFactor * 0.35
-    );
+    vec3 warmAtmosphere = vec3(1.0, 0.67, 0.42);
+    color += warmAtmosphere * sunGlow * horizonBand * 0.55;
 
-    // Sun elevation.
-    float sunHeight = clamp(uSunDirection.y, -1.0, 1.0);
-
-    // Sun becomes more important near the horizon.
-    float sunsetFactor =
-        1.0 - smoothstep(0.0, 0.5, abs(sunHeight));
-
-    // Warm atmospheric glow.
-    vec3 warmAtmosphere = vec3(1.0, 0.55, 0.25);
-
-    color += warmAtmosphere
-        * sunsetFactor
-        * horizonFactor
-        * 0.18;
+    // Darken the night sky without a daytime glow.
+    color = mix(color, uSkyBottom * 0.45, 1.0 - daylight);
 
     fragColor = vec4(color, 1.0);
 }

@@ -63,6 +63,73 @@ def make_cone(radius=.5, height=1.0, segments=24):
     return Mesh(vertices, indices)
 
 
+def make_capsule(radius=0.5, height=2.0, segments=16, rings=8):
+    """Capsule: cylinder with hemispheres at top and bottom."""
+    vertices, indices = [], []
+    half_height = height * 0.5
+    
+    # Top hemisphere
+    for ring in range(rings):
+        theta = ring * np.pi / (2 * rings)
+        sin_theta, cos_theta = np.sin(theta), np.cos(theta)
+        for seg in range(segments):
+            phi = seg * 2.0 * np.pi / segments
+            sin_phi, cos_phi = np.sin(phi), np.cos(phi)
+            x, y, z = radius * sin_theta * cos_phi, half_height + radius * cos_theta, radius * sin_theta * sin_phi
+            nx, ny, nz = sin_theta * cos_phi, cos_theta, sin_theta * sin_phi
+            u, v = seg / segments, ring / rings
+            vertices.append([x, y, z, nx, ny, nz, 1, 0, 0, u, v])
+    
+    # Cylinder
+    cyl_start = len(vertices)
+    for seg in range(segments):
+        phi = seg * 2.0 * np.pi / segments
+        sin_phi, cos_phi = np.sin(phi), np.cos(phi)
+        x, z = radius * cos_phi, radius * sin_phi
+        vertices.append([x, half_height, z, cos_phi, 0, sin_phi, 1, 0, 0, seg / segments, 0.5])
+        vertices.append([x, -half_height, z, cos_phi, 0, sin_phi, 1, 0, 0, seg / segments, 0.5])
+    
+    # Bottom hemisphere
+    bot_start = len(vertices)
+    for ring in range(rings):
+        theta = np.pi / 2 + ring * np.pi / (2 * rings)
+        sin_theta, cos_theta = np.sin(theta), np.cos(theta)
+        for seg in range(segments):
+            phi = seg * 2.0 * np.pi / segments
+            sin_phi, cos_phi = np.sin(phi), np.cos(phi)
+            x, y, z = radius * sin_theta * cos_phi, -half_height + radius * cos_theta, radius * sin_theta * sin_phi
+            nx, ny, nz = sin_theta * cos_phi, cos_theta, sin_theta * sin_phi
+            u, v = seg / segments, 0.5 + ring / rings
+            vertices.append([x, y, z, nx, ny, nz, 1, 0, 0, u, v])
+    
+    # Top hemisphere indices
+    for ring in range(rings - 1):
+        for seg in range(segments):
+            a = ring * segments + seg
+            b = a + segments
+            c = (a + 1) % (segments if ring < rings - 1 else segments)
+            d = (b + 1) % segments + b - a
+            indices += [a, b, c, c, b, d]
+    
+    # Cylinder indices
+    for seg in range(segments):
+        a = cyl_start + seg * 2
+        b = a + 1
+        c = cyl_start + ((seg + 1) % segments) * 2
+        d = c + 1
+        indices += [a, b, c, c, b, d]
+    
+    # Bottom hemisphere indices
+    for ring in range(rings - 1):
+        for seg in range(segments):
+            a = bot_start + ring * segments + seg
+            b = a + segments
+            c = (a + 1) % segments if ring < rings - 1 else (a + 1) % segments
+            indices += [a, c, b, b, c, b + 1 if ring < rings - 1 else c + 1]
+    
+    return Mesh(vertices, indices)
+
+
 def make_sphere(radius=1.0, segments=16, rings=12):
     """UV-mapped sphere for sun, moon, and stars backdrop."""
     vertices, indices = [], []

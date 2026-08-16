@@ -8,6 +8,11 @@ def clamp01(value):
     return max(0.0, min(1.0, float(value)))
 
 
+def smoothstep(edge0, edge1, x):
+    t = clamp01((x - edge0) / max(0.0001, edge1 - edge0))
+    return t * t * (3.0 - 2.0 * t)
+
+
 @dataclass
 class TimeOfDay:
     """Single source of truth for the full Castaway day/night cycle.
@@ -21,17 +26,36 @@ class TimeOfDay:
     current_time: float = 12.0
     cycle_length: float = 24.0
     speed: float = 0.22
+    time_scale: float = 0.22
+    paused: bool = False
     sunrise_time: float = 6.0
     sunset_time: float = 18.0
 
     def __post_init__(self):
         self.current_time = float(self.current_time) % self.cycle_length
+        self.speed = float(self.speed)
+        self.time_scale = float(self.time_scale if self.time_scale != 0.0 else self.speed)
 
     def advance(self, dt):
-        self.current_time = (self.current_time + dt * self.speed) % self.cycle_length
+        if self.paused:
+            return
+        self.current_time = (self.current_time + dt * self.time_scale) % self.cycle_length
 
     def set_time(self, hours):
         self.current_time = float(hours) % self.cycle_length
+
+    def set_time_scale(self, scale):
+        self.time_scale = float(scale)
+        self.speed = self.time_scale
+
+    def pause(self):
+        self.paused = True
+
+    def resume(self):
+        self.paused = False
+
+    def toggle_pause(self):
+        self.paused = not self.paused
 
     def _normalize_hour(self, hours=None):
         if hours is None:
@@ -87,11 +111,37 @@ class TimeOfDay:
         zenith = glm.mix(zenith, day_zenith, t)
         return bottom, horizon, zenith
 
-    def _fog_params(self, daylight):
-        fog_density = glm.mix(glm.vec3(0.032, 0.026, 0.022), glm.vec3(0.010, 0.012, 0.016), clamp01(daylight * 1.25))
+    def _morning_fog_factor(self, hour):
+        """Morning fog is enabled only in the early-morning window after sunrise.
+
+        The effect starts gently around sunrise, peaks shortly after sunrise, then
+        fades back to zero during the normal morning/day transition. This keeps the
+        fog tied to the project's existing time-of-day cycle instead of using a
+        random or permanent fog state.
+        """
+        if hour < self.sunrise_time:
+            return 0.0
+
+        rise_start = self.sunrise_time
+        rise_end = self.sunrise_time + 1.5
+        fade_end = self.sunrise_time + 3.5
+
+        if hour <= rise_end:
+            t = clamp01((hour - rise_start) / max(0.01, rise_end - rise_start))
+            return smoothstep(0.0, 1.0, t)
+        if hour <= fade_end:
+            t = clamp01((hour - rise_end) / max(0.01, fade_end - rise_end))
+            return 1.0 - smoothstep(0.0, 1.0, t)
+        return 0.0
+
+    def _fog_params(self, daylight, hour):
+        base_density = glm.mix(glm.vec3(0.032, 0.026, 0.022), glm.vec3(0.010, 0.012, 0.016), clamp01(daylight * 1.25))
         fog_color = glm.mix(glm.vec3(0.09, 0.12, 0.20), glm.vec3(0.75, 0.56, 0.44), clamp01(daylight * 1.5))
         fog_color = glm.mix(fog_color, glm.vec3(0.40, 0.45, 0.60), clamp01((daylight - 0.2) / 0.8))
-        return fog_density.x, fog_color
+
+        morning_boost = self._morning_fog_factor(hour)
+        fog_density = base_density.x * (1.0 + morning_boost * 1.2)
+        return fog_density, fog_color
 
     def _cloud_params(self, daylight):
         cloud_daylight = clamp01((daylight * 1.2) - 0.1)
@@ -108,11 +158,13 @@ class TimeOfDay:
         sun_dir = self._sun_direction_for(hour)
         moon_dir = self._moon_direction_for(sun_dir)
 
-        sun_intensity = 0.08 + daylight * 1.25
-        moon_intensity = 0.10 + (1.0 - daylight) * 0.85
+        # Keep the sun fully dark at night while preserving a strong noon peak and a
+        # warm sunrise/sunset transition.
+        sun_intensity = max(0.0, daylight * 1.75 - 0.03)
+        moon_intensity = max(0.0, 0.65 - daylight * 0.75)
 
         sky_bottom, sky_horizon, sky_zenith = self._sky_palette(daylight)
-        fog_density, fog_color = self._fog_params(daylight)
+        fog_density, fog_color = self._fog_params(daylight, hour)
         cloud_top, cloud_bottom, cloud_density, cloud_speed, cloud_lighting = self._cloud_params(daylight)
 
         return {

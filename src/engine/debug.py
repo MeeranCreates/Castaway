@@ -142,6 +142,20 @@ class DebugSystem:
             return "NORTH"
         return "EAST"
 
+    def _safe_gl_string(self, enum_name):
+        try:
+            if not hasattr(glfw, "get_current_context"):
+                return "Unknown"
+            context = glfw.get_current_context()
+            if context is None:
+                return "Unknown"
+            value = glGetString(enum_name)
+            if value is None:
+                return "Unknown"
+            return value.decode("utf-8", errors="ignore")
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return "Unknown"
+
     def build_snapshot(self, app, fps, frame_time):
         camera = getattr(app, "camera", None)
         player = getattr(app, "player", None)
@@ -149,7 +163,12 @@ class DebugSystem:
         moon = getattr(app, "moon", None)
         terrain = getattr(app, "terrain", None)
         time_of_day = getattr(app, "time_of_day", None)
-        world_name = getattr(app, "world_name", "Castaway")
+        world_obj = getattr(app, "world", None)
+        world_name = getattr(app, "world_name", None)
+        if world_name is None and world_obj is not None and hasattr(world_obj, "name"):
+            world_name = getattr(world_obj, "name")
+        if world_name is None:
+            world_name = "Castaway"
         weather = getattr(app, "weather", "Clear")
         day_number = getattr(app, "day_number", 1)
         visible_objects = getattr(app, "visible_objects", len(getattr(getattr(app, "props", None), "objects", [])))
@@ -160,7 +179,7 @@ class DebugSystem:
         textures = getattr(app, "textures", 18)
 
         if player is not None and hasattr(player, "position"):
-            px, py, pz = (float(player.position.x), float(player.position.y), float(player.position.z))
+            px, py, pz = (round(float(player.position.x), 3), round(float(player.position.y), 3), round(float(player.position.z), 3))
             speed = getattr(player, "speed", 0.0)
         else:
             px, py, pz = (0.0, 0.0, 0.0)
@@ -198,9 +217,19 @@ class DebugSystem:
         else:
             terrain_height = 0.0
 
+        prompt = ""
+        if player is not None and getattr(player, "interact_tree", None) is not None:
+            prompt = "Press [E] to Chop"
+
         ambient = getattr(app.lighting, "ambient", getattr(app, "ambient_light", 0.35)) if hasattr(app, "lighting") else 0.35
-        opengl_version = glGetString(GL_VERSION).decode("utf-8", errors="ignore") if glGetString(GL_VERSION) else "Unknown"
-        renderer = glGetString(GL_RENDERER).decode("utf-8", errors="ignore") if glGetString(GL_RENDERER) else "Unknown"
+        has_real_window = hasattr(app, "window") and getattr(app.window, "handle", None) is not None
+        has_real_gl_context = has_real_window and getattr(app.window, "handle", None) is not None
+        if not has_real_gl_context:
+            opengl_version = "Unknown"
+            renderer = "Unknown"
+        else:
+            opengl_version = self._safe_gl_string(GL_VERSION)
+            renderer = self._safe_gl_string(GL_RENDERER)
 
         return {
             "fps": float(fps),
@@ -215,6 +244,7 @@ class DebugSystem:
             "time_of_day": time_hours,
             "time_label": self._format_time(time_hours),
             "day_number": int(day_number),
+            "interaction_prompt": prompt,
             "sun_elevation": float(sun_elevation),
             "sun_direction": getattr(sun, "direction", None),
             "sun_intensity": float(sun_intensity),
@@ -281,6 +311,7 @@ class DebugSystem:
             f"Sun Intensity: {snapshot['sun_intensity']:.2f}",
             f"Moon Intensity: {snapshot['moon_intensity']:.2f}",
             f"Ambient: {snapshot['ambient']:.2f}",
+            f"Interact: {snapshot['interaction_prompt'] or 'None'}",
             "",
             f"Objects: {snapshot['visible_objects']}",
             f"Meshes: {snapshot['meshes']}",

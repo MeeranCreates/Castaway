@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-import glm
+import math
+from pyglm import glm
 from .mesh import make_box, make_cone
 
 
@@ -17,6 +18,123 @@ class SceneObject:
         m = glm.translate(glm.mat4(1), self.position)
         m = glm.rotate(m, glm.radians(self.rotation), glm.vec3(0, 1, 0))
         return glm.scale(m, self.scale)
+
+
+@dataclass
+class Tree:
+    position: glm.vec3
+    scale: float = 1.0
+    max_health: int = 100
+    health: int = 100
+    alive: bool = True
+    rotation: float = 0.0
+    fall_progress: float = 0.0
+    base_trunk_color: glm.vec3 = glm.vec3(0.24, 0.17, 0.10)
+    base_leaf_color: glm.vec3 = glm.vec3(0.18, 0.45, 0.20)
+    can_fall: bool = False
+
+    def __post_init__(self):
+        self.health = int(self.max_health)
+
+        trunk_palette = [
+            glm.vec3(0.26, 0.18, 0.11),
+            glm.vec3(0.22, 0.15, 0.09),
+            glm.vec3(0.30, 0.21, 0.12),
+            glm.vec3(0.18, 0.12, 0.07),
+            glm.vec3(0.24, 0.17, 0.10),
+        ]
+        leaf_palette = [
+            glm.vec3(0.16, 0.38, 0.17),
+            glm.vec3(0.19, 0.46, 0.20),
+            glm.vec3(0.12, 0.30, 0.14),
+            glm.vec3(0.24, 0.52, 0.22),
+            glm.vec3(0.17, 0.40, 0.18),
+        ]
+        seed = abs(int(self.position.x * 17.13 + self.position.z * 11.91))
+        index = seed % len(trunk_palette)
+        self.base_trunk_color = trunk_palette[index]
+        self.base_leaf_color = leaf_palette[index % len(leaf_palette)]
+
+    @property
+    def colliders(self):
+        if not self.alive:
+            return []
+        return [(self.position, 1.1 * self.scale)]
+
+    def damage(self, amount):
+        if not self.alive:
+            return
+        self.health = max(0, self.health - int(amount))
+        if self.health <= 0:
+            self.alive = False
+            self.can_fall = True
+            self.fall_progress = 0.0
+
+    def update(self, dt):
+        if self.can_fall and self.fall_progress < 1.0:
+            self.fall_progress = min(1.0, self.fall_progress + dt * 1.2)
+            self.rotation = max(self.rotation, 80.0 * self.fall_progress)
+
+    def render_objects(self):
+        if not self.alive:
+            return []
+        trunk = SceneObject(
+            make_box(),
+            glm.vec3(self.position.x, self.position.y + self.scale * 0.75, self.position.z),
+            glm.vec3(self.scale * 0.32, self.scale * 1.6, self.scale * 0.32),
+            self.base_trunk_color,
+            self.scale * 0.72,
+            self.rotation,
+        )
+        leaves = SceneObject(
+            make_cone(),
+            glm.vec3(self.position.x, self.position.y + self.scale * 1.9, self.position.z),
+            glm.vec3(self.scale * 1.6, self.scale * 2.2, self.scale * 1.6),
+            self.base_leaf_color,
+            self.scale * 0.8,
+            self.rotation,
+        )
+        return [trunk, leaves]
+
+
+class TreeSystem:
+    def __init__(self, terrain):
+        self.terrain = terrain
+        self.trees = [
+            Tree(glm.vec3(-18.0, terrain.height_at(-18.0, -9.0), -9.0), 2.1),
+            Tree(glm.vec3(-14.0, terrain.height_at(-14.0, -14.0), -14.0), 1.8),
+            Tree(glm.vec3(15.0, terrain.height_at(15.0, -12.0), -12.0), 2.6),
+            Tree(glm.vec3(22.0, terrain.height_at(22.0, 8.0), 8.0), 2.0),
+            Tree(glm.vec3(-26.0, terrain.height_at(-26.0, 12.0), 12.0), 2.3),
+            Tree(glm.vec3(8.0, terrain.height_at(8.0, 22.0), 22.0), 2.0),
+            Tree(glm.vec3(30.0, terrain.height_at(30.0, -18.0), -18.0), 2.4),
+            Tree(glm.vec3(-32.0, terrain.height_at(-32.0, 20.0), 20.0), 2.0),
+            Tree(glm.vec3(33.0, terrain.height_at(33.0, 12.0), 12.0), 1.8),
+            Tree(glm.vec3(-10.0, terrain.height_at(-10.0, 30.0), 30.0), 2.2),
+            Tree(glm.vec3(18.0, terrain.height_at(18.0, 30.0), 30.0), 1.9),
+            Tree(glm.vec3(-30.0, terrain.height_at(-30.0, -28.0), -28.0), 2.5),
+            Tree(glm.vec3(40.0, terrain.height_at(40.0, -8.0), -8.0), 2.2),
+            Tree(glm.vec3(-24.0, terrain.height_at(-24.0, 34.0), 34.0), 2.1),
+            Tree(glm.vec3(12.0, terrain.height_at(12.0, -35.0), -35.0), 2.4),
+        ]
+
+    @property
+    def colliders(self):
+        items = []
+        for tree in self.trees:
+            if tree.alive:
+                items.extend(tree.colliders)
+        return items
+
+    def update(self, dt):
+        for tree in self.trees:
+            tree.update(dt)
+
+    def render_objects(self):
+        objects = []
+        for tree in self.trees:
+            objects.extend(tree.render_objects())
+        return objects
 
 
 class IslandProps:

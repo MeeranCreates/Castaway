@@ -1,6 +1,13 @@
 import math
+from pathlib import Path
 
 from src.engine.time_of_day import TimeOfDay
+
+
+def test_post_process_does_not_tint_every_pixel_with_fog_color():
+    post_shader = Path("assets/shaders/post.frag").read_text()
+    assert "mix(hdr, uFogColor" not in post_shader
+    assert "warmAtmosphere" not in post_shader
 
 
 def test_cycle_exposes_day_and_night_values():
